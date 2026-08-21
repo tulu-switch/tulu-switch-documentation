@@ -61,14 +61,21 @@ call regardless of how their money is distributed.
 
 ## Inflows with auto settlement
 
-Deposits and [virtual accounts](../checkout/Virtual%20Account.md) that
-auto-settle credit **one specific provider wallet** — the rail that processed
-the payment. That booking detail matters to your books, not your customer:
+The two inflow rails behave differently — pick deliberately:
 
-- Ada pays into a Paystack-settled virtual account → her Paystack wallet
-  rises → her unified balance rises by the same amount. Done.
-- Over time inflows naturally concentrate on whichever rail settles most —
-  the unified view hides that drift until a movement needs it.
+- **Customer deposits** (`POST /v2/wallet/deposit`) credit the customer's
+  wallet directly — specifically the wallet backed by the provider that
+  processed the checkout. The unified balance rises immediately and
+  automatically. Use this whenever the money belongs to a known customer.
+- **Virtual accounts** (`POST /v2/checkout`) do **not** touch customer
+  wallets. When money lands, the account flips to `PAID` and you receive a
+  `checkout.paid` webhook; the funds settle into **your pool at that
+  provider**. Attributing them to a customer's balance is your move — so for
+  the unified-balance pattern, prefer wallet deposits, or build your own
+  attribution step on top of `checkout.paid`.
+
+Either way, settlement is booked against one builder-side provider wallet —
+which rail handled it never reaches your customer's view.
 
 ## What to show, what to log
 

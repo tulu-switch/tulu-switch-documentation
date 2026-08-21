@@ -77,4 +77,4 @@ whenever a debit was spread across wallets.
 - [Transactions](transactions/Transactions.md) — history, status lifecycle, aggregates
 
 ### Patterns
-- [Unified Customer Balance](use-cases/Unified%20Customer%20Balance.md) — one balance in your app, many rails underneath
+- [Unified Customer Balance](use-cases/Unified-Customer-Balance.md) — one balance in your app, many rails underneath
