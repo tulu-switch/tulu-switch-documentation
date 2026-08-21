@@ -40,6 +40,26 @@ sequenceDiagram
 4. Poll status (`GET /v2/checkout/:reference`) or wait for webhooks; close
    early if the customer abandons.
 
+### Crediting a customer wallet
+
+Pass `customerId` at creation and the account becomes **customer-aware**:
+when money lands, Tulu Switch credits that customer's wallet automatically —
+same provider and currency as the account — and writes a `DEPOSIT` row into
+their history (reference = your checkout reference). The builder's pool and
+holding mirror the credit, exactly like a normal deposit.
+
+```
+POST /v2/checkout
+{ "currency": "NGN", "amount": 12000,
+  "customerId": "cus_ada", "reference": "ord_001" }
+```
+
+- No wallet with that provider yet? The payment still marks the account
+  `PAID` and fires `checkout.paid` (now including `customerId`) — but no
+  wallet credit happens; create the wallet and reconcile manually.
+- Without `customerId`, behavior is unchanged: funds settle to your pool and
+  attribution stays yours.
+
 ## Scenario
 
 Acme's checkout shows Ada a one-time account instead of a card form:
@@ -54,6 +74,11 @@ POST /v2/checkout
 
 Ada sends ₦12,000 from her banking app → the checkout flips to
 `COMPLETED`, funds settle, and Acme's webhook fires. Order fulfilled.
+
+Customer-aware variant: created with `"customerId": "cus_ada"`, the same
+payment also credits Ada's Paystack NGN wallet ₦12,000 and fires
+`checkout.paid` with `customerId` set — her unified balance rises with no
+extra call from Acme.
 
 ## Notes
 

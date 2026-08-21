@@ -61,18 +61,21 @@ call regardless of how their money is distributed.
 
 ## Inflows with auto settlement
 
-The two inflow rails behave differently — pick deliberately:
+Three inflow rails, all ending in the same place — a rising unified balance:
 
 - **Customer deposits** (`POST /v2/wallet/deposit`) credit the customer's
   wallet directly — specifically the wallet backed by the provider that
   processed the checkout. The unified balance rises immediately and
-  automatically. Use this whenever the money belongs to a known customer.
-- **Virtual accounts** (`POST /v2/checkout`) do **not** touch customer
-  wallets. When money lands, the account flips to `PAID` and you receive a
-  `checkout.paid` webhook; the funds settle into **your pool at that
-  provider**. Attributing them to a customer's balance is your move — so for
-  the unified-balance pattern, prefer wallet deposits, or build your own
-  attribution step on top of `checkout.paid`.
+  automatically.
+- **Customer-aware virtual accounts** (`POST /v2/checkout` with
+  `customerId`) credit the linked customer's wallet automatically when money
+  lands — same provider and currency as the account, `DEPOSIT` row included,
+  `checkout.paid` webhook carries the `customerId`. Use this for bank-
+  transfer-style checkouts that belong to a known customer.
+- **Anonymous virtual accounts** (`POST /v2/checkout` without `customerId`)
+  do **not** touch customer wallets: the account flips to `PAID`, you get
+  `checkout.paid`, and funds settle into **your pool at that provider**.
+  Attributing them to a customer's balance is your move.
 
 Either way, settlement is booked against one builder-side provider wallet —
 which rail handled it never reaches your customer's view.
