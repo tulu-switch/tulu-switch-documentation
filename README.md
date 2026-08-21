@@ -75,3 +75,6 @@ whenever a debit was spread across wallets.
 ### Visibility
 - [Webhooks](webhooks/Webhooks.md) — events pushed to you, signature verification
 - [Transactions](transactions/Transactions.md) — history, status lifecycle, aggregates
+
+### Patterns
+- [Unified Customer Balance](use-cases/Unified%20Customer%20Balance.md) — one balance in your app, many rails underneath
