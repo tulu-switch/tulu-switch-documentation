@@ -1,0 +1,76 @@
+# Internal Transfer
+
+`POST /v2/wallet/transfer/internal` · `POST /v2/wallet/transfer/internal/bulk`
+
+Move balance between **two of your own customers**. No bank rails, no
+provider call — it settles synchronously in the books and cannot fail
+part-way.
+
+## Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor B as Builder App
+    participant TS as Tulu Switch
+
+    B->>TS: POST /v2/wallet/transfer/internal ₦450 (no providers)
+    TS->>TS: source: no single wallet covers 450<br/>combined = 450 ✓ → split legs<br/>[Flutterwave 350, Paystack 100]
+    TS->>TS: target: Bola has Flutterwave wallet → matches sender's primary
+    TS->>TS: atomic: Ada FW −350, Ada PS −100, Bola +450<br/>book builder holdings net per provider
+    TS-->>B: 201 COMPLETED { split: true, from.legs: [...] }
+    Note over TS: Money already at its destination —<br/>no provider call, nothing pending.
+```
+
+## Source selection — auto, with splitting
+
+Omit `fromProvider` and the source resolves in three steps:
+
+1. **Richest covering wallet wins** — one wallet covers the amount → done.
+2. **Otherwise we split** — combined balances cover it but no single wallet
+   does → the debit is spread greedily richest-first across wallets.
+3. **Otherwise `400`** — quoting the richest *and* the combined total.
+
+Pinning `fromProvider` disables splitting: that exact wallet must cover it.
+
+## Destination selection — sender-first with fallback
+
+The recipient defaults to the **sender's primary provider** (keeps the move
+inside one provider). If they hold no wallet there, we fall back to their
+richest active wallet instead of failing — the movement becomes
+cross-provider (`crossProvider: true` + explanatory `note`). Pin
+`toProvider` to disable the fallback.
+
+## Scenario — split
+
+Ada owes Bola ₦450. Ada holds ₦100 via Paystack, ₦350 via Flutterwave:
+
+```
+POST /v2/wallet/transfer/internal
+{ "fromCustomerId": "cus_ada", "toCustomerId": "cus_bola",
+  "channel": "WALLET", "currency": "NGN", "amount": 450 }
+```
+
+→ Flutterwave −350 + Paystack −100 → Bola +450, instantly:
+
+```json
+{
+  "reference": "cint_1721375800000_abc123",
+  "from": { "provider": "Flutterwave", "autoSelected": true,
+            "legs": [
+              { "walletId": "cwlt_002", "provider": "Flutterwave", "amount": "350" },
+              { "walletId": "cwlt_001", "provider": "Paystack",    "amount": "100" } ] },
+  "to":   { "customerId": "cus_bola", "provider": "Flutterwave" },
+  "split": true,
+  "crossProvider": false,
+  "status": "COMPLETED"
+}
+```
+
+Each leg appears as its own row in both customers' histories.
+
+## Bulk
+
+`POST /v2/wallet/transfer/internal/bulk` moves up to 200 pairs in one call.
+All-or-nothing validation; everything settles in one transaction;
+`requestReference` idempotency (`409` on duplicate).
