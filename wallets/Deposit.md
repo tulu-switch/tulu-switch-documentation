@@ -42,21 +42,54 @@ Deposits are inbound, so balances don't drive the choice — you are choosing
 The response always tells you what was picked via `provider`, `walletId`
 and `autoSelected`.
 
-## Scenario
+## Scenario — Ada tops up ₦5,000
 
-Acme tops up Ada's wallet with ₦5,000:
+Acme's checkout button fires server-side:
 
 ```
 POST /v2/wallet/deposit
 { "customerId": "cus_ada", "channel": "WALLET", "currency": "NGN",
   "amount": 5000, "email": "ada.obi@example.com",
   "callbackUrl": "https://acme.app/callback" }
-→ { "checkoutUrl": "https://checkout.paystack.com/xxx",
-    "provider": "Paystack", "autoSelected": true, ... }
+→ 201 {
+    "reference": "cdep_1721375800000_abc123",   ← store this
+    "checkoutUrl": "https://checkout.paystack.com/xyz",
+    "provider": "Paystack",
+    "walletId": "cwlt_001",
+    "autoSelected": true,
+    "status": "pending"
+  }
 ```
 
-Ada pays on the Paystack page → her **Paystack wallet** is credited ₦5,000,
-and `customer.deposit.success` fires to Acme's webhook URL.
+Acme redirects Ada to `checkoutUrl`. She pays on the Paystack page and lands
+back at `callbackUrl`. Meanwhile:
+
+1. **Provider confirms** → Tulu Switch credits Ada's Paystack wallet ₦5,000
+   and Acme's builder holding atomically.
+2. **`customer.deposit.success` arrives** at Acme's webhook URL:
+
+```json
+{ "event": "customer.deposit.success",
+  "data": { "customerId": "cus_ada",
+            "reference": "cdep_1721375800000_abc123",
+            "amount": 5000, "currency": "NGN",
+            "provider": "Paystack" } }
+```
+
+3. Acme verifies the signature, matches `reference` against the pending
+   top-up, marks the order paid, shows *"Wallet funded"*.
+
+If Ada returns to the app *before* the webhook lands, Acme polls instead:
+
+```
+GET /v2/wallet/deposit/verify?reference=cdep_1721375800000_abc123
+→ { "status": "success" }
+```
+
+Whichever path runs first credits once — the other is a safe no-op.
+
+**What Ada sees:** redirect → pay → back in the app with her balance up
+₦5,000. She never learns Paystack was involved.
 
 ## Confirming arrival (race-safe)
 

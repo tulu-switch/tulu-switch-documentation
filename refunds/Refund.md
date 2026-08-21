@@ -36,23 +36,46 @@ sequenceDiagram
 - Track status via `GET /v2/refunds/:reference`; list with filters by
   customer or status.
 
-## Scenario
+## Scenario — partial refund of a cancelled order
 
-Ada deposited ₦5,000, then asked for ₦1,500 back after cancelling part of
-an order:
+Ada deposited ₦5,000 (reference `cdep_1721375800000_abc123`), then
+cancelled part of her order. Acme's support tool issues ₦1,500 back:
 
 ```
 POST /v2/refunds
 { "customerId": "cus_ada",
-  "reference": "cdep_1721375800000_abc123",
+  "reference": "cdep_1721375800000_abc123",   ← the ORIGINAL deposit ref
   "amount": 1500,
   "reason": "Partial cancellation" }
-→ { "reference": "crfd_…", "status": "pending", "amount": 1500 }
+→ 201 { "reference": "crfd_1721375800000_r01",
+        "status": "pending", "amount": 1500 }
 ```
 
-Behind the scenes: Ada's wallet −₦1,500 → Paystack reverses ₦1,500 to her
-card/bank → webhook confirms. A full refund would omit `amount` and return
-the entire ₦5,000.
+Step by step:
+
+1. **Immediately** — Ada's wallet −₦1,500, refund row created `PENDING`
+2. **Provider side** — Paystack reverses ₦1,500 to her original card/bank
+   (the money returns the way it came; Acme never handles card details)
+3. **Confirmation** — `customer.refund.success` webhook → status
+   `COMPLETED`; or poll `GET /v2/refunds/crfd_1721375800000_r01`
+
+A full refund would omit `amount` and return the entire ₦5,000.
+
+**Failure path:** if Paystack can't reverse (card expired, bank refused),
+the refund flips to `FAILED` and **Ada's wallet is re-credited ₦1,500
+automatically** before `customer.refund.failed` fires. Acme should surface
+a "refund failed, money back in wallet" state rather than retrying blindly.
+
+**Edge cases:**
+
+- Refunding an already-refunded deposit? Partial amounts stack until the
+  total refunded reaches the deposit amount — then further attempts fail.
+- Ada spent the money? The wallet is debited anyway — refunds are not
+  blocked by current balance, so a customer's wallet can go negative if they
+  no longer hold the deposited funds. Guard on your side (check
+  `GET /v2/wallet/balance/:customerId` before refunding) if that matters.
+
+**What Ada sees:** "₦1,500 refunded to your card — 1–3 business days."
 
 ## Notes
 

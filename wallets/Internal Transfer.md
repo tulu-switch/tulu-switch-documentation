@@ -61,31 +61,53 @@ itself resolves wallets server-side.
 
 ## Scenario — split
 
-Ada owes Bola ₦450. Ada holds ₦100 via Paystack, ₦350 via Flutterwave:
+Ada owes Bola ₦450. Ada holds ₦100 via Paystack, ₦350 via Flutterwave — no
+single wallet covers it, but together they do, so the debit splits. Acme's
+app looks both customers up by email first (`GET /v2/customers?search=…`),
+then:
 
 ```
 POST /v2/wallet/transfer/internal
 { "fromCustomerId": "cus_ada", "toCustomerId": "cus_bola",
   "channel": "WALLET", "currency": "NGN", "amount": 450 }
+→ 201 {
+    "reference": "cint_1721375800000_abc123",
+    "from": { "customerId": "cus_ada", "provider": "Flutterwave",
+              "autoSelected": true,
+              "legs": [
+                { "walletId": "cwlt_002", "provider": "Flutterwave", "amount": "350" },
+                { "walletId": "cwlt_001", "provider": "Paystack",    "amount": "100" } ] },
+    "to":   { "customerId": "cus_bola", "provider": "Flutterwave",
+              "walletId": "cwlt_bola_fw", "autoSelected": true },
+    "split": true,
+    "crossProvider": false,
+    "status": "COMPLETED"
+  }
 ```
 
-→ Flutterwave −350 + Paystack −100 → Bola +450, instantly:
+Reading the response:
 
-```json
-{
-  "reference": "cint_1721375800000_abc123",
-  "from": { "provider": "Flutterwave", "autoSelected": true,
-            "legs": [
-              { "walletId": "cwlt_002", "provider": "Flutterwave", "amount": "350" },
-              { "walletId": "cwlt_001", "provider": "Paystack",    "amount": "100" } ] },
-  "to":   { "customerId": "cus_bola", "provider": "Flutterwave" },
-  "split": true,
-  "crossProvider": false,
-  "status": "COMPLETED"
-}
+- `split: true` + `from.legs[]` — the money left Ada in two pieces,
+  richest-first (Flutterwave 350, then Paystack 100)
+- `to.autoSelected: true` — Acme never picked Bola's rail; the sender's
+  primary provider matched her wallet
+- Status is already `COMPLETED` — no webhooks to wait for; balances moved
+
+History rows this creates (group them by the shared reference family when
+displaying):
+
+```
+cint_…_out_0  Ada    TRANSFER −350  Flutterwave
+cint_…_out_1  Ada    TRANSFER −100  Paystack
+cint_…_in     Bola   DEPOSIT  +450  Flutterwave
 ```
 
-Each leg appears as its own row in both customers' histories.
+**Edge cases:** combined balance short → `400` quoting richest *and*
+combined totals; pinning `fromProvider: "Paystack"` would have failed —
+pinned wallets must cover alone, no splitting.
+
+**What Ada sees:** one notification — "Sent ₦450 to Bola ✓" — never two
+debits.
 
 ## Bulk
 

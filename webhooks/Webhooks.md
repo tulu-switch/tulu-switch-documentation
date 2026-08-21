@@ -74,12 +74,35 @@ Body shape:
 - Events are informational-but-authoritative: by the time a success event
   arrives, balances have already moved.
 
-## Scenario
+## Scenario — payroll, handled correctly
 
-Acme runs payroll → one transfer per employee. For each, their backend
-receives either `customer.transfer.success` or `customer.transfer.failed`
-and updates order state. A failed item needs no compensation logic — the
-wallet was already refunded by Tulu Switch before the event fired.
+Acme runs payroll: 40 bank payouts via
+`POST /v2/wallet/transfer/bulk`. The batch returns `COMPLETED` with a
+`batchReference`, but per-item provider confirmations still arrive as
+webhooks. Their handler does three things, in order:
+
+```text
+1. VERIFY   recompute HMAC-SHA256 over the raw body with the webhook secret;
+            mismatch → drop (respond 200 anyway to stop retries)
+2. IDEMPOTENT UPDATE   upsert on data.reference:
+            seen before → acknowledge and do nothing else
+3. ACT      customer.transfer.success → mark payroll item paid
+            customer.transfer.failed → mark failed; wallet was already
+            refunded by Tulu Switch BEFORE this event fired, so no
+            compensation logic is needed — just notify the user
+```
+
+Why the order matters:
+
+- **Verify first** — forged webhooks must never reach your ledger
+- **Idempotency second** — retries mean you *will* see duplicates; matching
+  on `reference` makes replays harmless
+- **No balance math in the handler** — events are authoritative records of
+  moves Tulu Switch already made. Reconcile against
+  `GET /v2/transactions/:reference` if you need certainty
+
+Respond `200` within 10 s of receiving *any* verified event — slow handlers
+cause retries even when processing succeeded.
 
 ## Verifying signatures
 
