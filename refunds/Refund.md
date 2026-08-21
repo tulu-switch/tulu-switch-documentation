@@ -70,10 +70,9 @@ a "refund failed, money back in wallet" state rather than retrying blindly.
 
 - Refunding an already-refunded deposit? Partial amounts stack until the
   total refunded reaches the deposit amount — then further attempts fail.
-- Ada spent the money? The wallet is debited anyway — refunds are not
-  blocked by current balance, so a customer's wallet can go negative if they
-  no longer hold the deposited funds. Guard on your side (check
-  `GET /v2/wallet/balance/:customerId` before refunding) if that matters.
+- Ada spent the money? The refund is rejected up front (`400`) — Tulu Switch
+  never drives a wallet negative. If the funds are gone, top the wallet up
+  first or resolve the case manually with the provider.
 
 **What Ada sees:** "₦1,500 refunded to your card — 1–3 business days."
 
