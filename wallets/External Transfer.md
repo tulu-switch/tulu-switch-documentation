@@ -1,6 +1,6 @@
 # External Transfer (Cross-Builder)
 
-`POST /v2/wallet/transfer/external` · `GET /v2/wallet/resolve/:walletId`
+`POST /v2/wallet/transfer/external` · `POST /v2/wallet/transfer/external/bulk` · `GET /v2/wallet/resolve/:walletId`
 
 Send money from your customer's wallet to a customer of **another builder**,
 identified by wallet id.
@@ -66,3 +66,29 @@ POST /v2/wallet/transfer/external
 Kunle's wallet is credited instantly; both builders see the movement in
 their transaction histories. If Acme retries the same
 `requestReference`, they get `409` and no second move.
+
+## Bulk
+
+`POST /v2/wallet/transfer/external/bulk` pays up to 200 destination wallets
+across any builders in one call:
+
+```
+POST /v2/wallet/transfer/external/bulk
+{ "requestReference": "payouts_aug_01",
+  "transfers": [
+    { "fromWalletId": "cwlt_ada_001", "toWalletId": "cwlt_beta_001", "amount": 2500, "narration": "Invoice INV-0042" },
+    { "fromWalletId": "cwlt_ada_001", "toWalletId": "cwlt_gamma_009", "amount": 1000 }
+  ] }
+→ { status: "COMPLETED", batchReference: "cbulk_…", transfers: [ … ] }
+```
+
+- Same rules as the single transfer, per item: both wallets must share
+  **provider, channel, currency and environment**.
+- **All-or-nothing validation** — if any item fails (unknown wallet,
+  provider mismatch, insufficient balance), nothing moves and the `400`
+  lists every invalid item by `index`.
+- Balances are checked **across items**: one source wallet funding several
+  transfers cannot collectively overdraw, even though each item would pass
+  alone.
+- Batch `requestReference` is idempotent (`409` on duplicate); track the
+  batch with `GET /v2/wallet/transfers/bulk/:batchReference`.
