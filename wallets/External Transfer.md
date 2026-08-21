@@ -36,6 +36,10 @@ sequenceDiagram
 - Resolve first: `GET /v2/wallet/resolve/:walletId` returns masked recipient
   details (any builder's wallet, same environment) so you can confirm who
   you are paying.
+- **Recipients are addressed by wallet id only.** You cannot look up another
+  builder's customer by email or name — cross-builder responses mask PII
+  (`a***@example.com`) by design. Collect the wallet id from the recipient
+  (they see it in the other builder's app), then resolve it to confirm.
 - Idempotency: pass `requestReference`; re-submitting the same key is
   rejected with `409` — never a double move.
 - Cross-provider is intentionally **not** supported here; use internal

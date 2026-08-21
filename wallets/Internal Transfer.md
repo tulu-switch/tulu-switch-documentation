@@ -41,6 +41,24 @@ richest active wallet instead of failing — the movement becomes
 cross-provider (`crossProvider: true` + explanatory `note`). Pin
 `toProvider` to disable the fallback.
 
+## Finding recipients
+
+Both sides are your own customers, so look them up in your own directory:
+
+```
+GET /v2/customers?search=bola@example.com
+→ [{ id: "cus_bola", firstName: "Bola", … }]
+```
+
+- `search` is full-text across **name and email** — an email, a name, or a
+  fragment all work
+- Take `id` from the result as `fromCustomerId` / `toCustomerId`
+- Want to preview balances first? `GET /v2/customers/:id` returns the
+  customer with their wallets
+
+There is no separate resolve endpoint for internal transfers — the transfer
+itself resolves wallets server-side.
+
 ## Scenario — split
 
 Ada owes Bola ₦450. Ada holds ₦100 via Paystack, ₦350 via Flutterwave:

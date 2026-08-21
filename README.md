@@ -53,6 +53,9 @@ whenever a debit was spread across wallets.
 
 ## Guides
 
+### Start here
+- [Getting Started](getting-started/Getting%20Started.md) — auth, environments, the golden path, errors & retries, going-live checklist
+
 ### Identity & setup
 - [Customers](customers/Customers.md) — create customers, open per-provider wallets
 
